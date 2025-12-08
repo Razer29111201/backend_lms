@@ -6,17 +6,15 @@ dotenv.config();
 console.log(process.env.DB_USER);
 const dbConfig = {
 
-
-    host: process.env.DB_HOST || "tramway.proxy.rlwy.net",
-    user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "QdIGWTmiRBQnkLAHfOGmETDYYJpXfAHv",
-    database: process.env.DB_NAME || "railway",
-    port: process.env.DB_PORT || 20189,
+    host: "crossover.proxy.rlwy.net",
+    user: "root",
+    password: "zRZqHEcPBOXRHYcGsVDROfkOmEDadAbI",
+    database: "railway",
+    port: 28675,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0,
+    ssl: false
 
 };;
 
