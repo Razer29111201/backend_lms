@@ -13,11 +13,99 @@ class AttendanceController {
         }
     }
 
+
+
+    static async save(req, res) {
+        try {
+            const { classId, session, records } = req.body;
+
+            // Validation
+            if (!classId) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Class ID is required'
+                });
+            }
+
+            if (!session) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Session number is required'
+                });
+            }
+
+            if (!Array.isArray(records)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Records must be an array'
+                });
+            }
+
+            console.log('Saving attendance:', { classId, session, recordCount: records.length }); // Debug
+
+            await transaction(async (conn) => {
+                // Delete existing attendance
+                await conn.query(
+                    'DELETE FROM attendance WHERE class_id = ? AND session = ?',
+                    [classId, session]
+                );
+
+                // Insert new records
+                if (records.length > 0) {
+                    for (const record of records) {
+                        if (!record.studentId) {
+                            console.warn('Skipping record without studentId:', record);
+                            continue;
+                        }
+
+                        await conn.query(
+                            'INSERT INTO attendance (class_id, session, student_id, status, note) VALUES (?, ?, ?, ?, ?)',
+                            [
+                                parseInt(classId),
+                                parseInt(session),
+                                parseInt(record.studentId),
+                                record.status || 'on-time',
+                                record.note || ''
+                            ]
+                        );
+                    }
+                }
+            });
+
+            res.json({
+                success: true,
+                message: 'Attendance saved successfully',
+                data: {
+                    classId: parseInt(classId),
+                    session: parseInt(session),
+                    recordCount: records.length
+                }
+            });
+
+        } catch (error) {
+            console.error('Error saving attendance:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message,
+                details: error.stack
+            });
+        }
+    }
     static async getByClass(req, res) {
         try {
             const { classId } = req.params;
             const records = await AttendanceModel.findByClass(classId);
-            res.json({ success: true, data: records });
+
+            const formattedRecords = records.map(r => ({
+                id: r.id,
+                classId: r.class_id,
+                session: r.session,
+                studentId: r.student_id,
+                status: r.status,
+                note: r.note || ''
+            }));
+
+            res.json({ success: true, data: formattedRecords });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -33,48 +121,19 @@ class AttendanceController {
         }
     }
 
-    static async save(req, res) {
-        try {
-            const { classId, sessionDate, records } = req.body;
-
-            if (!classId || !sessionDate) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Class ID and session date are required'
-                });
-            }
-
-            await transaction(async (conn) => {
-                await conn.query(
-                    'DELETE FROM attendance WHERE class_id = ? AND session_date = ?',
-                    [classId, sessionDate]
-                );
-
-                if (records && records.length > 0) {
-                    for (const record of records) {
-                        await conn.query(
-                            'INSERT INTO attendance (class_id, session_date, student_id, status, note) VALUES (?, ?, ?, ?, ?)',
-                            [classId, sessionDate, record.studentId, record.status, record.note || '']
-                        );
-                    }
-                }
-            });
-
-            res.json({ success: true, message: 'Attendance saved successfully' });
-        } catch (error) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    }
-
     static async delete(req, res) {
         try {
-            const { classId, sessionDate } = req.params;
-            const deleted = await AttendanceModel.deleteByClassAndDate(classId, sessionDate);
-            res.json({ success: true, message: `Deleted ${deleted} attendance records` });
+            const { classId, session } = req.params;
+            const deleted = await AttendanceModel.deleteByClassAndSession(classId, session);
+            res.json({
+                success: true,
+                message: `Deleted ${deleted} attendance records`
+            });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
         }
     }
+
 }
 
 export default AttendanceController;

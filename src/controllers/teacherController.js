@@ -1,59 +1,93 @@
 // src/controllers/teacherController.js
-import db from '../config/db.js';
+import TeacherModel from '../models/teacherModel.js';
 
-const getAll = async (req, res) => {
-    try {
-        const [rows] = await db.query('SELECT * FROM teachers');
-        res.json({ success: true, data: rows });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+class TeacherController {
+    static async getAll(req, res) {
+        try {
+            const { active } = req.query;
+
+            let teachers;
+            if (active === 'true') {
+                teachers = await TeacherModel.findActive();
+            } else {
+                teachers = await TeacherModel.findAll();
+            }
+
+            res.json({ success: true, data: teachers });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
-};
 
-const getOne = async (req, res) => {
-    try {
-        const [rows] = await db.query('SELECT * FROM teachers WHERE id = ?', [req.params.id]);
-        res.json({ success: true, data: rows[0] || null });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+    static async getOne(req, res) {
+        try {
+            const teacher = await TeacherModel.findById(req.params.id);
+            if (!teacher) {
+                return res.status(404).json({ success: false, error: 'Teacher not found' });
+            }
+            res.json({ success: true, data: teacher });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
-};
 
-const create = async (req, res) => {
-    try {
-        const { name = null, email = null } = req.body;
-        const [result] = await db.query('INSERT INTO teachers (name, email) VALUES (?, ?)', [name, email]);
-        const [rows] = await db.query('SELECT * FROM teachers WHERE id = ?', [result.insertId]);
-        res.status(201).json({ success: true, data: rows[0] });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+    static async create(req, res) {
+        try {
+            const { code, name, email, phone, subject, active } = req.body;
+
+            if (!code || !name) {
+                return res.status(400).json({ success: false, error: 'Code and name are required' });
+            }
+
+            const codeExists = await TeacherModel.codeExists(code);
+            if (codeExists) {
+                return res.status(409).json({ success: false, error: 'Teacher code already exists' });
+            }
+
+            const id = await TeacherModel.create({ code, name, email, phone, subject, active });
+
+            res.status(201).json({ success: true, data: { id, code, name, email, phone, subject, active } });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
-};
 
-const update = async (req, res) => {
-    try {
-        const { name, email } = req.body;
-        await db.query('UPDATE teachers SET name = ?, email = ? WHERE id = ?', [name, email, req.params.id]);
-        const [rows] = await db.query('SELECT * FROM teachers WHERE id = ?', [req.params.id]);
-        res.json({ success: true, data: rows[0] || null });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+    static async update(req, res) {
+        try {
+            const { id } = req.params;
+            const { code, name, email, phone, subject, active } = req.body;
+
+            const teacher = await TeacherModel.findById(id);
+            if (!teacher) {
+                return res.status(404).json({ success: false, error: 'Teacher not found' });
+            }
+
+            if (code !== teacher.code) {
+                const codeExists = await TeacherModel.codeExists(code, id);
+                if (codeExists) {
+                    return res.status(409).json({ success: false, error: 'Teacher code already exists' });
+                }
+            }
+
+            await TeacherModel.update(id, { code, name, email, phone, subject, active });
+
+            res.json({ success: true, data: { id: parseInt(id), code, name, email, phone, subject, active } });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
-};
 
-const deleteTeacher = async (req, res) => {
-    try {
-        await db.query('DELETE FROM teachers WHERE id = ?', [req.params.id]);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+    static async delete(req, res) {
+        try {
+            const deleted = await TeacherModel.delete(req.params.id);
+            if (!deleted) {
+                return res.status(404).json({ success: false, error: 'Teacher not found' });
+            }
+            res.json({ success: true, message: 'Teacher deleted successfully' });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
-};
+}
 
-export default {
-    getAll,
-    getOne,
-    create,
-    update,
-    delete: deleteTeacher
-};
+export default TeacherController;
