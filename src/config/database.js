@@ -7,11 +7,11 @@ console.log(process.env.DB_USER);
 const dbConfig = {
 
 
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
+    host: process.env.DB_HOST || "tramway.proxy.rlwy.net",
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD || "QdIGWTmiRBQnkLAHfOGmETDYYJpXfAHv",
+    database: process.env.DB_NAME || "railway",
+    port: process.env.DB_PORT || 20189,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
