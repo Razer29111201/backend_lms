@@ -11,8 +11,8 @@ export const authenticateToken = (req, res, next) => {
             error: 'Access token required'
         });
     }
-    const SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    const SECRET = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+    jwt.verify(token, SECRET, (err, user) => {
         if (err) {
             return res.status(403).json({
                 success: false,
