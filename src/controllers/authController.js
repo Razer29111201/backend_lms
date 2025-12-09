@@ -1,11 +1,15 @@
 // src/controllers/authController.js
+import jwt from 'jsonwebtoken';
 import { query } from '../config/database.js';
 import bcrypt from 'bcryptjs'; // Cần cài: npm install bcryptjs
 
 class AuthController {
+    // authController.js - login()
+
     static async login(req, res) {
         try {
             const { email, password } = req.body;
+            console.log('📧 Login attempt:', { email, password: '***' });
 
             if (!email || !password) {
                 return res.status(400).json({
@@ -14,100 +18,108 @@ class AuthController {
                 });
             }
 
-            // Tìm user theo email
-            const sql = 'SELECT * FROM users WHERE email = ? and password = ?';
-            const users = await query(sql, [email, password]);
-            console.log(users);
+            // Query user
+            const sql = 'SELECT id, email, name, role, teacher_id, cm_id FROM users WHERE email = ?';
+            const users = await query(sql, [email]);
 
+            console.log('👤 Users found:', users.length);
 
             if (users.length === 0) {
+                console.log('❌ User not found');
                 return res.status(401).json({
                     success: false,
-                    error: 'Email không tồn tại'
+                    error: 'Email hoặc mật khẩu không đúng'
                 });
             }
 
             const user = users[0];
+            console.log('✅ User found:', { id: user.id, email: user.email, role: user.role });
 
-            // Kiểm tra password (nếu dùng bcrypt)
-            // const isMatch = await bcrypt.compare(password, user.password);
+            // Query password
+            const passwordSql = 'SELECT password FROM users WHERE id = ?';
+            const passwordRows = await query(passwordSql, [user.id]);
 
-            // Tạm thời kiểm tra plaintext (CHỈ DÙNG CHO DEV)
-            if (user.password !== password) {
+            console.log('🔐 Password hash from DB:', passwordRows[0].password.substring(0, 20) + '...');
+            console.log('🔐 Password length:', passwordRows[0].password.length);
+
+            // Verify password
+            const isValidPassword = await bcrypt.compare(password, passwordRows[0].password);
+            console.log('🔑 Password valid:', isValidPassword);
+            console.log(isValidPassword);
+
+            if (!isValidPassword) {
+                console.log('❌ Password verification failed');
                 return res.status(401).json({
                     success: false,
-                    error: 'Mật khẩu không đúng'
+                    error: 'Email hoặc mật khẩu không đúng'
                 });
             }
 
-            // Trả về user data (không bao gồm password)
+            console.log('✅ Password verified successfully');
+
+            // Create JWT token
             const userData = {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
+                role: parseInt(user.role),
                 teacherId: user.teacher_id,
                 cmId: user.cm_id
             };
 
-            res.json({
+            const token = jwt.sign(
+                { id: user.id, email: user.email, role: parseInt(user.role) },
+                process.env.JWT_SECRET || 'fallback-secret-key-for-development',
+                { expiresIn: '24h' }
+            );
+
+            // ✅ CORRECT RESPONSE FORMAT
+            const responseData = {
                 success: true,
-                data: { user: userData }
-            });
+                data: {
+                    token: token,
+                    user: userData
+                }
+            };
+
+            return res.json(responseData);
 
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('❌ Login error:', error);
             res.status(500).json({
                 success: false,
                 error: 'Có lỗi xảy ra khi đăng nhập'
             });
         }
     }
-
+    // authController.js - register()
     static async register(req, res) {
         try {
             const { email, password, name, role, linkId } = req.body;
 
-            // Validation
-            if (!email || !password || !name || !role) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Vui lòng nhập đầy đủ thông tin'
-                });
-            }
+            // Validation...
 
-            if (password.length < 6) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Mật khẩu phải có ít nhất 6 ký tự'
-                });
-            }
+            // ✅ Hash password với bcrypt
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-            // Check email exists
-            const existing = await query('SELECT id FROM users WHERE email = ?', [email]);
-            if (existing.length > 0) {
-                return res.status(409).json({
-                    success: false,
-                    error: 'Email đã được sử dụng'
-                });
-            }
-
-            // Hash password (nếu dùng bcrypt)
-            // const hashedPassword = await bcrypt.hash(password, 10);
-
-            // Insert user
+            // Insert user với hashed password
             const sql = `
-                INSERT INTO users (email, password, name, role, teacher_id, cm_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `;
+            INSERT INTO users (email, password, name, role, teacher_id, cm_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+
+            // Convert role string to number
+            const roleNum = role === 'admin' ? 0 : role === 'teacher' ? 1 : 2;
+
             const teacherId = role === 'teacher' && linkId ? parseInt(linkId) : null;
             const cmId = role === 'cm' && linkId ? parseInt(linkId) : null;
 
             const result = await query(sql, [
                 email,
-                password, // Thay bằng hashedPassword khi dùng bcrypt
+                hashedPassword,  // ✅ Dùng hashed password
                 name,
-                role,
+                roleNum,         // ✅ Lưu role dạng số
                 teacherId,
                 cmId
             ]);
@@ -119,7 +131,7 @@ class AuthController {
                         id: result.insertId,
                         email,
                         name,
-                        role,
+                        role: roleNum,  // ✅ Trả về số
                         teacherId,
                         cmId
                     }
